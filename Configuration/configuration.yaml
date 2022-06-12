@@ -1,0 +1,53 @@
+﻿---
+# The following setup is for the Serilog logging system. You can ignore this
+# section unless you _really_ know what you are doing andwant to fiddle with it
+Serilog:
+  Using:
+  MinimumLevel: 
+    Default: Information
+  Override: 
+    Microsoft: Warning
+    System: Warning
+  Enrich:
+    - FromLogContext
+    - WithProcessId
+    - WithThreadId
+  WriteTo:
+    -
+      Name: Console
+    -
+      Name: File
+      Args:
+        path: logs/Telemachus.json
+        formatter: Serilog.Formatting.Json.JsonFormatter, Serilog
+# The following setup is for the application itself. This is the section you want
+# to modify
+Application:
+  # The full name of your organisation. Used in certain logging and output
+  Name: Example Group
+  GameServers:
+    -
+      # The full name of your server. Used in certain logging and Discord autocomplete.
+      Name: Example Server 1
+      # The short name of your server. This is used in various places and needs to
+      # be unique across your servers. Try to keep it to 3 or 4 letters. No spaces.
+      ShortName: EXS1
+      # Set these values so the application can connect to your DCS-gRPC instance
+      Rpc:
+        # The IP address DCS-gRPC is listening on. You can also use a hostname
+        Host: exs1.example.com
+        # This is the default port
+        Port: 50051
+    -
+      # The full name of your server. Used in certain logging and Discord autocomplete.
+      Name: Example Server 2
+      # The short name of your server. This is used in various places and needs to be
+      # unique across your servers.
+      # Try to keep it to 3 or 4 letters. No spaces.
+      ShortName: EXS2
+      # Set these values so the application can connect to your DCS-gRPC instance
+      Rpc:
+        # The IP address DCS-gRPC is listening on. You can also use a hostname
+        Host: exs2.example.com
+        # This is the default port
+        Port: 50051
