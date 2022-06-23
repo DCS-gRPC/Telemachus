@@ -72,12 +72,14 @@ namespace RurouniJones.Telemachus.Service
                                 o.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
                             })
                             .AddMeter("Telemachus.Core.Collectors.PlayerCountCollector")
+                            .AddMeter("Telemachus.Core.Collectors.EventCollector")
                         );
                         services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(60));
                         services.AddOptions<Configuration.Application>()
                             .Bind(configuration.GetSection("Application"))
                             .ValidateDataAnnotationsRecursively();
-                        services.AddSingleton<ICollector, PlayerCountCollector>();
+                        services.AddTransient<PlayerCountCollector>();
+                        services.AddTransient<EventCollector>();
                     })
                     .UseSerilog();
 

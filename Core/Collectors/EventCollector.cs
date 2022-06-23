@@ -1,0 +1,167 @@
+﻿/* 
+Custodian is a DCS server administration tool for Discord
+Copyright (C) 2022 Jeffrey Jones
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+using System.Diagnostics.Metrics;
+using Grpc.Net.Client;
+using Microsoft.Extensions.Logging;
+using RurouniJones.Dcs.Grpc.V0.Mission;
+
+namespace RurouniJones.Telemachus.Core.Collectors
+{
+    public class EventCollector : ICollector
+    {
+
+        private readonly ILogger<EventCollector> _logger;
+
+        private Meter _meter;
+
+        private readonly Counter<int> _shootCounter;
+
+        public EventCollector(ILogger<EventCollector> logger)
+        {
+            _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
+            _logger = logger;
+
+            _shootCounter = _meter.CreateCounter<int>("shoot_counter", "shots", "Number of shots");
+        }
+
+        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        {
+            List<Task> tasks = new();
+            foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
+            {
+                tasks.Add(MonitorAsync(entry.Key, entry.Value, stoppingToken));
+            }
+        }
+
+        public async Task MonitorAsync(string serverShortName, GrpcChannel channel, CancellationToken stoppingToken)
+        {
+            while(!stoppingToken.IsCancellationRequested) {
+                try { 
+                    var client = new MissionService.MissionServiceClient(channel);
+                    var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: stoppingToken);
+
+                    while (await events.ResponseStream.MoveNext(stoppingToken))
+                    {
+                        var eventUpdate = events.ResponseStream.Current;
+
+                        var tags = new System.Diagnostics.TagList
+                        {
+                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
+                        };
+
+                        switch (eventUpdate.EventCase)
+                        {
+                            case StreamEventsResponse.EventOneofCase.None:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Shot:
+                                tags.Add(new KeyValuePair<string, object?>("aircraft", eventUpdate.Shot.Initiator.Unit.Type));
+                                tags.Add(new KeyValuePair<string, object?>("coalition", eventUpdate.Shot.Initiator.Unit.Coalition));
+                                tags.Add(new KeyValuePair<string, object?>("is_player", eventUpdate.Shot.Initiator.Unit.HasPlayerName));
+                                tags.Add(new KeyValuePair<string, object?>("category", eventUpdate.Shot.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>("weapon", eventUpdate.Shot.Weapon.Type));
+                                _shootCounter.Add(1, tags);
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Hit:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Takeoff:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Land:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Crash:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Ejection:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Refueling:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Dead:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.PilotDead:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.BaseCapture:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MissionStart:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MissionEnd:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.RefuelingStop:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Birth:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.HumanFailure:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.DetailedFailure:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.EngineStartup:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.EngineShutdown:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.PlayerEnterUnit:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.PlayerLeaveUnit:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.ShootingStart:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.ShootingEnd:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MarkAdd:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MarkChange:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MarkRemove:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Kill:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Score:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.UnitLost:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.LandingAfterEjection:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.DiscardChairAfterEjection:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.WeaponAdd:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.LandingQualityMark:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Connect:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Disconnect:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.PlayerSendChat:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.PlayerChangeSlot:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.MissionCommand:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.CoalitionCommand:
+                                break;
+                            case StreamEventsResponse.EventOneofCase.GroupCommand:
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                } catch (Exception ex) {
+                    _logger.LogError("Exception processing event stream", ex);
+                    continue;
+                }
+            }
+        }
+    }
+}

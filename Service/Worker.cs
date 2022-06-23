@@ -31,11 +31,12 @@ namespace RurouniJones.Telemachus.Service
 
         private HashSet<ICollector> _collectors = new();
 
-        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, ICollector playerCountCollector)
+        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, PlayerCountCollector playerCountCollector, EventCollector eventCollector)
         {
             _logger = logger;
 
             _collectors.Add(playerCountCollector);
+            _collectors.Add(eventCollector);
 
             _gameServerChannels = new();
             foreach (var gameServer in appConfig.Value.GameServers)
