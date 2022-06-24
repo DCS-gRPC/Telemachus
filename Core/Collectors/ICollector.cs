@@ -23,6 +23,21 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public interface ICollector
     {
         public const string SERVER_SHORT_NAME_LABEL = "server_short_name";
+        public const string AIRCRAFT_TYPE_LABEL = "aircraft_type";
+        public const string COALITION_LABEL = "coalition";
+        public const string IS_PLAYER_LABEL = "is_player";
+        public const string CATEGORY_LABEL = "category";
+        public const string WEAPON_LABEL = "weapon";
+        public const string AIRBASE_LABEL = "airbase";
+        public const string AIRBASE_CATEGORY_LABEL = "airbase_category";
+        public const string SHOOTER_TYPE_LABEL = "shooter_type";
+        public const string SHOOTER_COALITION_LABEL = "shooter_coalition";
+        public const string SHOOTER_IS_PLAYER_LABEL = "shooter_is_player";
+        public const string SHOOTER_CATEGORY_LABEL = "shooter_category";
+        public const string TARGET_TYPE_LABEL = "target_type";
+        public const string TARGET_IS_PLAYER_LABEL = "target_is_player";
+        public const string TARGET_CATEGORY_LABEL = "target_category";
+        public const string TARGET_COALITION_LABEL = "target_coalition";
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken);
     }

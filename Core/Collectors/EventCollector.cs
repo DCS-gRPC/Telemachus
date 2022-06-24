@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 using System.Diagnostics.Metrics;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
+using RurouniJones.Dcs.Grpc.V0.Common;
 using RurouniJones.Dcs.Grpc.V0.Mission;
 
 namespace RurouniJones.Telemachus.Core.Collectors
@@ -31,6 +32,10 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private Meter _meter;
 
         private readonly Counter<int> _shootCounter;
+        private readonly Counter<int> _takeoffCounter;
+        private readonly Counter<int> _landingCounter;
+        private readonly Counter<int> _crashCounter;
+
 
         public EventCollector(ILogger<EventCollector> logger)
         {
@@ -38,6 +43,9 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _logger = logger;
 
             _shootCounter = _meter.CreateCounter<int>("shoot_counter", "shots", "Number of shots");
+            _takeoffCounter = _meter.CreateCounter<int>("takeoff_counter", "takeoffs", "Number of takeoffs");
+            _landingCounter = _meter.CreateCounter<int>("landing_counter", "landings", "Number of landings");
+            _crashCounter = _meter.CreateCounter<int>("crash_counter", "crashes", "Number of crashes");
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -52,38 +60,61 @@ namespace RurouniJones.Telemachus.Core.Collectors
         public async Task MonitorAsync(string serverShortName, GrpcChannel channel, CancellationToken stoppingToken)
         {
             while(!stoppingToken.IsCancellationRequested) {
-                try { 
+                StreamEventsResponse? eventUpdate = null;
+                try
+                { 
                     var client = new MissionService.MissionServiceClient(channel);
                     var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: stoppingToken);
 
                     while (await events.ResponseStream.MoveNext(stoppingToken))
                     {
-                        var eventUpdate = events.ResponseStream.Current;
+                        eventUpdate = events.ResponseStream.Current;
 
                         var tags = new System.Diagnostics.TagList
                         {
                             new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
                         };
-
                         switch (eventUpdate.EventCase)
                         {
                             case StreamEventsResponse.EventOneofCase.None:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Shot:
-                                tags.Add(new KeyValuePair<string, object?>("aircraft", eventUpdate.Shot.Initiator.Unit.Type));
-                                tags.Add(new KeyValuePair<string, object?>("coalition", eventUpdate.Shot.Initiator.Unit.Coalition));
-                                tags.Add(new KeyValuePair<string, object?>("is_player", eventUpdate.Shot.Initiator.Unit.HasPlayerName));
-                                tags.Add(new KeyValuePair<string, object?>("category", eventUpdate.Shot.Initiator.Unit.Category));
-                                tags.Add(new KeyValuePair<string, object?>("weapon", eventUpdate.Shot.Weapon.Type));
+                                var shotEvent = eventUpdate.Shot;
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, shotEvent.Initiator.Unit.Type));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, shotEvent.Initiator.Unit.Coalition));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, shotEvent.Initiator.Unit.HasPlayerName));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, shotEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, shotEvent.Weapon.Type));
                                 _shootCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Hit:
+                                //TODO
                                 break;
                             case StreamEventsResponse.EventOneofCase.Takeoff:
+                                var takeoffEvent = eventUpdate.Takeoff;
+                                tags = StandardSingleUnitEventTags(tags, takeoffEvent.Initiator.Unit);
+                                if(takeoffEvent.Place != null && takeoffEvent.Place.Name != null)
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.AIRBASE_LABEL, takeoffEvent.Place.Name));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.AIRBASE_CATEGORY_LABEL, takeoffEvent.Place.Category));
+
+                                }
+                                _takeoffCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Land:
+                                var landEvent = eventUpdate.Land;
+                                tags = StandardSingleUnitEventTags(tags, landEvent.Initiator.Unit);
+                                if (landEvent.Place != null && landEvent.Place.Name != null)
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.AIRBASE_LABEL, landEvent.Place.Name));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.AIRBASE_CATEGORY_LABEL, landEvent.Place.Category));
+                                }
+                                _landingCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Crash:
+                                var crashEvent = eventUpdate.Crash;
+                                tags = StandardSingleUnitEventTags(tags, crashEvent.Initiator.Unit);
+                                _crashCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Ejection:
                                 break;
@@ -158,10 +189,24 @@ namespace RurouniJones.Telemachus.Core.Collectors
                         }
                     }
                 } catch (Exception ex) {
-                    _logger.LogError("Exception processing event stream", ex);
+                    if(eventUpdate != null) { 
+                        _logger.LogError($"Exception processing event stream for {eventUpdate}", ex);
+                    } else
+                    {
+                        _logger.LogError($"Exception processing event stream", ex);
+                    }
                     continue;
                 }
             }
+        }
+
+        public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)
+        {
+            tags.Add(new KeyValuePair<string, object?>(ICollector.AIRCRAFT_TYPE_LABEL, unit.Type));
+            tags.Add(new KeyValuePair<string, object?>(ICollector.COALITION_LABEL, unit.Coalition));
+            tags.Add(new KeyValuePair<string, object?>(ICollector.IS_PLAYER_LABEL, unit.HasPlayerName));
+            tags.Add(new KeyValuePair<string, object?>(ICollector.CATEGORY_LABEL, unit.Category));
+            return tags;
         }
     }
 }
