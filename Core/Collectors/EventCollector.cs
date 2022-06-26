@@ -35,7 +35,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _takeoffCounter;
         private readonly Counter<int> _landingCounter;
         private readonly Counter<int> _crashCounter;
-
+        private readonly Counter<int> _hitCounter;
+        private readonly Counter<int> _killCounter;
+        private readonly Counter<int> _ejectionCounter;
+        private readonly Counter<int> _deadCounter;
+        private readonly Counter<int> _pilotDeadCounter;
 
         public EventCollector(ILogger<EventCollector> logger)
         {
@@ -46,6 +50,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _takeoffCounter = _meter.CreateCounter<int>("takeoff_counter", "takeoffs", "Number of takeoffs");
             _landingCounter = _meter.CreateCounter<int>("landing_counter", "landings", "Number of landings");
             _crashCounter = _meter.CreateCounter<int>("crash_counter", "crashes", "Number of crashes");
+            _hitCounter = _meter.CreateCounter<int>("hit_counter", "hits", "Number of hits");
+            _ejectionCounter = _meter.CreateCounter<int>("ejection_counter", "ejections", "Number of ejections");
+            _killCounter = _meter.CreateCounter<int>("kill_counter", "kills", "Number of kills");
+            _deadCounter = _meter.CreateCounter<int>("dead_counter", "deaths", "Number of unit deaths");
+            _pilotDeadCounter = _meter.CreateCounter<int>("pilot_dead_counter", "deaths", "Number of pilot deaths");
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -88,7 +97,24 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 _shootCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Hit:
-                                //TODO
+                                var hitEvent = eventUpdate.Hit;
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, hitEvent.Initiator.Unit.Type));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, hitEvent.Initiator.Unit.Coalition));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, hitEvent.Initiator.Unit.HasPlayerName));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, hitEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, hitEvent.Weapon.Type));
+                                if (hitEvent.Target.Unit != null)
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, hitEvent.Target.Unit.Type));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, hitEvent.Target.Unit.Coalition));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, hitEvent.Target.Unit.HasPlayerName));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, hitEvent.Target.Unit.Category));
+                                }
+                                else
+                                {
+                                    _logger.LogInformation("Hit event target was not a unit. Skipping processing"); // TODO handle other cases like statics etc.
+                                }
+                                _hitCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Takeoff:
                                 var takeoffEvent = eventUpdate.Takeoff;
@@ -117,12 +143,21 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 _crashCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Ejection:
+                                var ejectionEvent = eventUpdate.Ejection;
+                                tags = StandardSingleUnitEventTags(tags, ejectionEvent.Initiator.Unit);
+                                _ejectionCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Refueling:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Dead:
+                                var deadEvent = eventUpdate.Dead;
+                                tags = StandardSingleUnitEventTags(tags, deadEvent.Initiator.Unit);
+                                _deadCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.PilotDead:
+                                var pilotDeadEvent = eventUpdate.PilotDead;
+                                tags = StandardSingleUnitEventTags(tags, pilotDeadEvent.Initiator.Unit);
+                                _pilotDeadCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.BaseCapture:
                                 break;
@@ -157,6 +192,22 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.MarkRemove:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Kill:
+                                var killEvent = eventUpdate.Kill;
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, killEvent.Initiator.Unit.Type));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, killEvent.Initiator.Unit.Coalition));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, killEvent.Initiator.Unit.HasPlayerName));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, killEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.Weapon.Type));
+                                if(killEvent.Target.Unit != null) { 
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, killEvent.Target.Unit.Type));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, killEvent.Target.Unit.Coalition));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, killEvent.Target.Unit.HasPlayerName));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, killEvent.Target.Unit.Category));
+                                } else
+                                {
+                                    _logger.LogWarning("Kill event target was not a unit");
+                                }
+                                _killCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.Score:
                                 break;
