@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _ejectionCounter;
         private readonly Counter<int> _deadCounter;
         private readonly Counter<int> _pilotDeadCounter;
+        private readonly ConcurrentDictionary<string, int> _serverSimulationFramesPerSecond;
 
         public EventCollector(ILogger<EventCollector> logger)
         {
@@ -55,6 +57,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _killCounter = _meter.CreateCounter<int>("kill_counter", "kills", "Number of kills");
             _deadCounter = _meter.CreateCounter<int>("dead_counter", "deaths", "Number of unit deaths");
             _pilotDeadCounter = _meter.CreateCounter<int>("pilot_dead_counter", "deaths", "Number of pilot deaths");
+            _serverSimulationFramesPerSecond = new();
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -62,7 +65,13 @@ namespace RurouniJones.Telemachus.Core.Collectors
             List<Task> tasks = new();
             foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
             {
-                tasks.Add(MonitorAsync(entry.Key, entry.Value, stoppingToken));
+                var serverShortName = entry.Key;
+                var grpcChannel = entry.Value;
+
+                tasks.Add(MonitorAsync(serverShortName, grpcChannel, stoppingToken));
+                _meter.CreateObservableGauge("simulation_frames_per_second_gauge",
+                    () => { return GetSimulationFramesPerSecond(serverShortName); },
+                    description: "The number of server simulation frames per second");
             }
         }
 
@@ -74,6 +83,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                 { 
                     var client = new MissionService.MissionServiceClient(channel);
                     var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: stoppingToken);
+                    _serverSimulationFramesPerSecond[serverShortName] = 0;
 
                     while (await events.ResponseStream.MoveNext(stoppingToken))
                     {
@@ -193,12 +203,25 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 break;
                             case StreamEventsResponse.EventOneofCase.Kill:
                                 var killEvent = eventUpdate.Kill;
+                                if(killEvent.Initiator.Unit == null) {
+                                    _logger.LogWarning("Kill event with no initiator unit");
+                                    continue;
+                                }
+                                if (killEvent.Weapon == null)
+                                {
+                                    _logger.LogWarning("Kill event with no weapon");
+                                    continue;
+                                }
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, killEvent.Initiator.Unit.Type));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, killEvent.Initiator.Unit.Coalition));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, killEvent.Initiator.Unit.HasPlayerName));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, killEvent.Initiator.Unit.Category));
-                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.Weapon.Type));
-                                if(killEvent.Target.Unit != null) { 
+                                if(killEvent.Weapon != null) { 
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.Weapon.Type));
+                                } else {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.WeaponName));
+                                }
+                                if (killEvent.Target.Unit != null) {
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, killEvent.Target.Unit.Type));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, killEvent.Target.Unit.Coalition));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, killEvent.Target.Unit.HasPlayerName));
@@ -235,20 +258,30 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 break;
                             case StreamEventsResponse.EventOneofCase.GroupCommand:
                                 break;
+                            case StreamEventsResponse.EventOneofCase.SimulationFps:
+                                _serverSimulationFramesPerSecond[serverShortName] = (int) eventUpdate.SimulationFps.Average;
+                                break;
                             default:
                                 break;
                         }
                     }
                 } catch (Exception ex) {
                     if(eventUpdate != null) { 
-                        _logger.LogError($"Exception processing event stream for {eventUpdate}", ex);
+                        _logger.LogError("Exception processing event stream for {event}: {exception}", eventUpdate, ex.Message);
                     } else
                     {
-                        _logger.LogError($"Exception processing event stream", ex);
+                        _logger.LogError("Exception processing event stream: {exception}", ex.Message);
                     }
                     continue;
                 }
             }
+        }
+
+        private Measurement<int> GetSimulationFramesPerSecond(string serverShortName)
+        {
+            _logger.LogWarning($"Collecting FPS Value");
+            return new Measurement<int>(_serverSimulationFramesPerSecond[serverShortName],
+                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName));
         }
 
         public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)

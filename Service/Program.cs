@@ -61,7 +61,7 @@ namespace RurouniJones.Telemachus.Service
                                 .AddService("Telemachus")
                             )
                             .AddConsoleExporter()
-                            .AddOtlpExporter(o =>
+                            .AddOtlpExporter((o, m) =>
                             {
                                 o.Protocol = OtlpExportProtocol.Grpc;
                                 o.HttpClientFactory = () =>
@@ -70,6 +70,7 @@ namespace RurouniJones.Telemachus.Service
                                     return client;
                                 };
                                 o.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
+                                m.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = (int) TimeSpan.FromSeconds(1).TotalMilliseconds;
                             })
                             .AddMeter("Telemachus.Core.Collectors.PlayerCountCollector")
                             .AddMeter("Telemachus.Core.Collectors.EventCollector")
