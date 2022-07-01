@@ -112,7 +112,14 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, hitEvent.Initiator.Unit.Coalition));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, hitEvent.Initiator.Unit.HasPlayerName));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, hitEvent.Initiator.Unit.Category));
-                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, hitEvent.Weapon.Type));
+                                if (hitEvent.Weapon != null)
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, hitEvent.Weapon.Type));
+                                }
+                                else
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, hitEvent.WeaponName));
+                                }
                                 if (hitEvent.Target.Unit != null)
                                 {
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, hitEvent.Target.Unit.Type));
