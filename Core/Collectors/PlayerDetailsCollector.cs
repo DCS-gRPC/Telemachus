@@ -26,16 +26,18 @@ using RurouniJones.Dcs.Grpc.V0.Net;
 
 namespace RurouniJones.Telemachus.Core.Collectors
 { 
-    public class PlayerCountCollector : ICollector
+    public class PlayerDetailsCollector : ICollector
     {
-        private readonly ILogger<PlayerCountCollector> _logger;
+        private readonly ILogger<PlayerDetailsCollector> _logger;
 
         private Meter _meter;
+        private Histogram<int> _playerPings; // In milliseconds
 
-        public PlayerCountCollector(ILogger<PlayerCountCollector> logger)
+        public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger)
         {
             _meter = new Meter("Telemachus.Core.Collectors.PlayerCountCollector");
             _logger = logger;
+            _playerPings = _meter.CreateHistogram<int>("player_pings", "milliseconds", "Player Ping Times in milliseconds");
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -67,21 +69,31 @@ namespace RurouniJones.Telemachus.Core.Collectors
         {
             _logger.LogInformation($"Getting Players for {shortName}");
             List<Measurement<int>> results = new();
+            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
 
             var service = new NetService.NetServiceClient(channel);
             try
             {
                 var response = await service.GetPlayersAsync(new GetPlayersRequest { }, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: stoppingToken);
                 var players = response.Players;
+
+                // Get Coalition counts
                 var blueFor = players.Count(x => x.Coalition == Coalition.Blue);
                 var redFor = players.Count(x => x.Coalition == Coalition.Red);
 
                 results.Add(new Measurement<int>(blueFor,
-                    new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName),
+                    serverTag,
                     new KeyValuePair<string, object?>("coalition", "Blue")));
                 results.Add(new Measurement<int>(redFor,
-                    new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName),
+                    serverTag,
                     new KeyValuePair<string, object?>("coalition", "Red")));
+
+                // While we are here. Get the pings for the players and add them to the ping Histogram.
+                foreach(var player in players)
+                {
+                    if(player.Id == 1) continue; // Server player. Ignore
+                    _playerPings.Record((int)player.Ping, serverTag);
+                }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {

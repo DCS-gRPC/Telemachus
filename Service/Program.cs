@@ -79,7 +79,7 @@ namespace RurouniJones.Telemachus.Service
                         services.AddOptions<Configuration.Application>()
                             .Bind(configuration.GetSection("Application"))
                             .ValidateDataAnnotationsRecursively();
-                        services.AddTransient<PlayerCountCollector>();
+                        services.AddTransient<PlayerDetailsCollector>();
                         services.AddTransient<EventCollector>();
                     })
                     .UseSerilog();

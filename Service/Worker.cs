@@ -31,7 +31,7 @@ namespace RurouniJones.Telemachus.Service
 
         private HashSet<ICollector> _collectors = new();
 
-        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, PlayerCountCollector playerCountCollector, EventCollector eventCollector)
+        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, PlayerDetailsCollector playerCountCollector, EventCollector eventCollector)
         {
             _logger = logger;
 
