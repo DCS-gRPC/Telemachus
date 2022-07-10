@@ -38,6 +38,9 @@ namespace RurouniJones.Telemachus.Core.Collectors
         public const string TARGET_IS_PLAYER_LABEL = "target_is_player";
         public const string TARGET_CATEGORY_LABEL = "target_category";
         public const string TARGET_COALITION_LABEL = "target_coalition";
+        public const string UNIT_TYPE_LABEL = "unit_type";
+        public const string STATIC_TYPE_LABEL = "static_type";
+
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken);
     }

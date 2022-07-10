@@ -32,6 +32,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         private Meter _meter;
 
+        private readonly Counter<int> _birthCounter;
         private readonly Counter<int> _shootCounter;
         private readonly Counter<int> _takeoffCounter;
         private readonly Counter<int> _landingCounter;
@@ -48,6 +49,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
             _logger = logger;
 
+            _birthCounter = _meter.CreateCounter<int>("birth_counter", "births", "Number of units birth");
             _shootCounter = _meter.CreateCounter<int>("shoot_counter", "shots", "Number of shots");
             _takeoffCounter = _meter.CreateCounter<int>("takeoff_counter", "takeoffs", "Number of takeoffs");
             _landingCounter = _meter.CreateCounter<int>("landing_counter", "landings", "Number of landings");
@@ -185,6 +187,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.RefuelingStop:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Birth:
+                                var birthEvent = eventUpdate.Birth;
+                                if(birthEvent.Initiator.Unit != null) {
+                                    tags = StandardSingleUnitEventTags(tags, birthEvent.Initiator.Unit);
+                                    _birthCounter.Add(1, tags);
+                                }
                                 break;
                             case StreamEventsResponse.EventOneofCase.HumanFailure:
                                 break;
@@ -293,7 +300,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)
         {
-            tags.Add(new KeyValuePair<string, object?>(ICollector.AIRCRAFT_TYPE_LABEL, unit.Type));
+            tags.Add(new KeyValuePair<string, object?>(ICollector.UNIT_TYPE_LABEL, unit.Type));
             tags.Add(new KeyValuePair<string, object?>(ICollector.COALITION_LABEL, unit.Coalition));
             tags.Add(new KeyValuePair<string, object?>(ICollector.IS_PLAYER_LABEL, unit.HasPlayerName));
             tags.Add(new KeyValuePair<string, object?>(ICollector.CATEGORY_LABEL, unit.Category));
