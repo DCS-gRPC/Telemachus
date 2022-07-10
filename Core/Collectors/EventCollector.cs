@@ -33,6 +33,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private Meter _meter;
 
         private readonly Counter<int> _birthCounter;
+        private readonly Counter<int> _lostCounter;
         private readonly Counter<int> _shootCounter;
         private readonly Counter<int> _takeoffCounter;
         private readonly Counter<int> _landingCounter;
@@ -59,6 +60,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _killCounter = _meter.CreateCounter<int>("kill_counter", "kills", "Number of kills");
             _deadCounter = _meter.CreateCounter<int>("dead_counter", "deaths", "Number of unit deaths");
             _pilotDeadCounter = _meter.CreateCounter<int>("pilot_dead_counter", "deaths", "Number of pilot deaths");
+            _lostCounter = _meter.CreateCounter<int>("lost_counter", "losses", "Number of units lost");
             _serverSimulationFramesPerSecond = new();
         }
 
@@ -249,6 +251,9 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.Score:
                                 break;
                             case StreamEventsResponse.EventOneofCase.UnitLost:
+                                var lostEvent = eventUpdate.UnitLost;
+                                tags = StandardSingleUnitEventTags(tags, lostEvent.Initiator.Unit);
+                                _lostCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.LandingAfterEjection:
                                 break;
