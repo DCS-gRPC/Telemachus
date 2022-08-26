@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 using Grpc.Net.Client;
 using Microsoft.Extensions.Options;
 using RurouniJones.Telemachus.Configuration;
+using RurouniJones.Telemachus.Core;
 using RurouniJones.Telemachus.Core.Collectors;
 
 namespace RurouniJones.Telemachus.Service
@@ -26,17 +27,19 @@ namespace RurouniJones.Telemachus.Service
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
+        private readonly HashSet<ICollector> _collectors = new();
+        private readonly SessionUpdater _sessionUpdater;
 
         private readonly Dictionary<string, GrpcChannel> _gameServerChannels = new();
-
-        private readonly HashSet<ICollector> _collectors = new();
 
         public Worker(ILogger<Worker> logger, IOptions<Application> appConfig,
             PlayerDetailsCollector playerDetailsCollector,
             EventCollector eventCollector,
-            BallisticsCollector ballisticsCollector)
+            BallisticsCollector ballisticsCollector,
+            SessionUpdater sessionUpdator)
         {
             _logger = logger;
+            _sessionUpdater = sessionUpdator;
 
             _collectors.Add(playerDetailsCollector);
             _collectors.Add(eventCollector);
@@ -63,6 +66,8 @@ namespace RurouniJones.Telemachus.Service
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Starting Worker");
+
+            await _sessionUpdater.ExecuteAsync(_gameServerChannels, stoppingToken);
             foreach (var collector in _collectors) {
                 collector.Execute(_gameServerChannels, stoppingToken);
             }

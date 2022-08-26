@@ -40,7 +40,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
         public const string TARGET_COALITION_LABEL = "target_coalition";
         public const string UNIT_TYPE_LABEL = "unit_type";
         public const string STATIC_TYPE_LABEL = "static_type";
-
+        public const string SESSION_ID_LABEL = "session_id";
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken);
     }

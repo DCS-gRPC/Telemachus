@@ -29,15 +29,18 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public class PlayerDetailsCollector : ICollector
     {
         private readonly ILogger<PlayerDetailsCollector> _logger;
+        private readonly Session _session;
+
 
         private readonly Meter _meter;
         private readonly Histogram<int> _playerPings; // In milliseconds
 
-        public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger)
+        public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger, Session session)
         {
             _meter = new Meter("Telemachus.Core.Collectors.PlayerCountCollector");
             _logger = logger;
             _playerPings = _meter.CreateHistogram<int>("player_pings", "milliseconds", "Player Ping Times in milliseconds");
+            _session = session;
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -70,6 +73,8 @@ namespace RurouniJones.Telemachus.Core.Collectors
         {
             _logger.LogDebug("Getting Players for {shortName}", shortName);
             List<Measurement<int>> results = new();
+
+            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(shortName));
             var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
 
             var service = new NetService.NetServiceClient(channel);
@@ -83,9 +88,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
                 var redFor = players.Count(x => x.Coalition == Coalition.Red);
 
                 results.Add(new Measurement<int>(blueFor,
+                    sessionTag,
                     serverTag,
                     new KeyValuePair<string, object?>("coalition", "Blue")));
                 results.Add(new Measurement<int>(redFor,
+                    sessionTag,
                     serverTag,
                     new KeyValuePair<string, object?>("coalition", "Red")));
 
@@ -93,7 +100,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                 foreach(var player in players)
                 {
                     if(player.Id == 1) continue; // Server player. Ignore
-                    _playerPings.Record((int)player.Ping, serverTag);
+                    _playerPings.Record((int)player.Ping, sessionTag, serverTag);
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
@@ -102,7 +109,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             }
             catch (Exception ex)
             {
-                _logger.LogError("Exception calling {shortName}. Exception {ex.Message}", shortName, ex.Message);
+                _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
             }
 
             return results;

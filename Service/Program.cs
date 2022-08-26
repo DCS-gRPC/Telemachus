@@ -21,6 +21,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using RurouniJones.Telemachus.Configuration.Util;
+using RurouniJones.Telemachus.Core;
 using RurouniJones.Telemachus.Core.Collectors;
 using Serilog;
 using System.Runtime.InteropServices;
@@ -84,6 +85,8 @@ namespace RurouniJones.Telemachus.Service
                         services.AddTransient<PlayerDetailsCollector>();
                         services.AddTransient<EventCollector>();
                         services.AddTransient<BallisticsCollector>();
+                        services.AddSingleton<Session>();
+                        services.AddTransient<SessionUpdater>();
                     })
                     .UseSerilog();
 

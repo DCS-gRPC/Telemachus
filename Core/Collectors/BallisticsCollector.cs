@@ -28,13 +28,15 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public class BallisticsCollector : ICollector
     {
         private readonly ILogger<BallisticsCollector> _logger;
-
+        private readonly Session _session;
         private readonly Meter _meter;
 
-        public BallisticsCollector(ILogger<BallisticsCollector> logger)
+
+        public BallisticsCollector(ILogger<BallisticsCollector> logger, Session session)
         {
-            _meter = new Meter("Telemachus.Core.Collectors.BallisticsCollector");
             _logger = logger;
+            _session = session;
+            _meter = new Meter("Telemachus.Core.Collectors.BallisticsCollector");
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
@@ -65,8 +67,10 @@ namespace RurouniJones.Telemachus.Core.Collectors
         }
         private async Task<List<Measurement<int>>> GetBallisticsOnServer(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            _logger.LogDebug("Getting Ballistics for {shortName}", shortName);
+            _logger.LogDebug("Getting Ballistics for {shortName}", shortName);           
             List<Measurement<int>> results = new();
+
+            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(shortName));
             var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
 
             var service = new HookService.HookServiceClient(channel);
@@ -75,7 +79,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                 var response = await service.GetBallisticsCountAsync(new GetBallisticsCountRequest {}, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: stoppingToken);
                 var ballisticsCount = (int) response.Count;
 
-                results.Add(new Measurement<int>(ballisticsCount, serverTag));
+                results.Add(new Measurement<int>(ballisticsCount, sessionTag, serverTag));
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
@@ -83,7 +87,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             }
             catch (Exception ex)
             {
-                _logger.LogError("Exception calling {shortName}. Exception {ex.Message}", shortName, ex.Message);
+                _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
             }
 
             return results;

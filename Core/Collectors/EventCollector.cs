@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Security.Cryptography.X509Certificates;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using RurouniJones.Dcs.Grpc.V0.Common;
@@ -47,10 +48,13 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _disconnectCounter;
         private readonly ConcurrentDictionary<string, int> _serverSimulationFramesPerSecond;
 
-        public EventCollector(ILogger<EventCollector> logger)
+        private readonly Session _session;
+
+        public EventCollector(ILogger<EventCollector> logger, Session session)
         {
             _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
             _logger = logger;
+            _session = session;
 
             _birthCounter = _meter.CreateCounter<int>("birth_counter", "births", "Number of units birth");
             _shootCounter = _meter.CreateCounter<int>("shoot_counter", "shots", "Number of shots");
@@ -100,6 +104,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
                         var tags = new System.Diagnostics.TagList
                         {
+                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName)),
                             new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
                         };
                         switch (eventUpdate.EventCase)
@@ -310,7 +315,8 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private Measurement<int> GetSimulationFramesPerSecond(string serverShortName)
         {
             return new Measurement<int>(_serverSimulationFramesPerSecond[serverShortName],
-                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName));
+                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName),
+                new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName)));
         }
 
         public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)
