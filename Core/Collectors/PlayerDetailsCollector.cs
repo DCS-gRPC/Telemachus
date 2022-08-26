@@ -30,8 +30,8 @@ namespace RurouniJones.Telemachus.Core.Collectors
     {
         private readonly ILogger<PlayerDetailsCollector> _logger;
 
-        private Meter _meter;
-        private Histogram<int> _playerPings; // In milliseconds
+        private readonly Meter _meter;
+        private readonly Histogram<int> _playerPings; // In milliseconds
 
         public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger)
         {
@@ -42,6 +42,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
         {
+            _logger.LogDebug("Executing PlayerDetailsCollector");
             _meter.CreateObservableGauge("players", () => { return GetPlayersOnServers(gameServerChannels, stoppingToken); },
                 description: "The number of players on a server");
         }
@@ -67,14 +68,14 @@ namespace RurouniJones.Telemachus.Core.Collectors
         }
         private async Task<List<Measurement<int>>> GetPlayersOnServer(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            _logger.LogInformation($"Getting Players for {shortName}");
+            _logger.LogDebug("Getting Players for {shortName}", shortName);
             List<Measurement<int>> results = new();
             var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
 
             var service = new NetService.NetServiceClient(channel);
             try
             {
-                var response = await service.GetPlayersAsync(new GetPlayersRequest { }, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: stoppingToken);
+                var response = await service.GetPlayersAsync(new GetPlayersRequest { }, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: stoppingToken);
                 var players = response.Players;
 
                 // Get Coalition counts
@@ -97,11 +98,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning($"Timed out calling {shortName}");
+                _logger.LogWarning("Timed out calling {shortName}", shortName);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Exception calling {shortName}. Exception {ex.Message}");
+                _logger.LogError("Exception calling {shortName}. Exception {ex.Message}", shortName, ex.Message);
             }
 
             return results;

@@ -74,6 +74,8 @@ namespace RurouniJones.Telemachus.Service
                             })
                             .AddMeter("Telemachus.Core.Collectors.PlayerCountCollector")
                             .AddMeter("Telemachus.Core.Collectors.EventCollector")
+                            .AddMeter("Telemachus.Core.Collectors.BallisticsCollector")
+
                         );
                         services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(60));
                         services.AddOptions<Configuration.Application>()
@@ -81,6 +83,7 @@ namespace RurouniJones.Telemachus.Service
                             .ValidateDataAnnotationsRecursively();
                         services.AddTransient<PlayerDetailsCollector>();
                         services.AddTransient<EventCollector>();
+                        services.AddTransient<BallisticsCollector>();
                     })
                     .UseSerilog();
 

@@ -30,7 +30,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         private readonly ILogger<EventCollector> _logger;
 
-        private Meter _meter;
+        private readonly Meter _meter;
 
         private readonly Counter<int> _birthCounter;
         private readonly Counter<int> _lostCounter;
@@ -43,6 +43,8 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _ejectionCounter;
         private readonly Counter<int> _deadCounter;
         private readonly Counter<int> _pilotDeadCounter;
+        private readonly Counter<int> _connectCounter;
+        private readonly Counter<int> _disconnectCounter;
         private readonly ConcurrentDictionary<string, int> _serverSimulationFramesPerSecond;
 
         public EventCollector(ILogger<EventCollector> logger)
@@ -61,11 +63,14 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _deadCounter = _meter.CreateCounter<int>("dead_counter", "deaths", "Number of unit deaths");
             _pilotDeadCounter = _meter.CreateCounter<int>("pilot_dead_counter", "deaths", "Number of pilot deaths");
             _lostCounter = _meter.CreateCounter<int>("lost_counter", "losses", "Number of units lost");
+            _connectCounter = _meter.CreateCounter<int>("connect_counter", "connections", "Number of player connection attempts regardless of success or failure");
+            _disconnectCounter = _meter.CreateCounter<int>("disconnect_counter", "disconnections", "Number of player disconnections");
             _serverSimulationFramesPerSecond = new();
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
         {
+            _logger.LogDebug("Executing EventCollector");
             List<Task> tasks = new();
             foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
             {
@@ -99,6 +104,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                         };
                         switch (eventUpdate.EventCase)
                         {
+                        /*
                             case StreamEventsResponse.EventOneofCase.None:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Shot:
@@ -263,10 +269,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 break;
                             case StreamEventsResponse.EventOneofCase.LandingQualityMark:
                                 break;
-                            case StreamEventsResponse.EventOneofCase.Connect:
-                                break;
-                            case StreamEventsResponse.EventOneofCase.Disconnect:
-                                break;
                             case StreamEventsResponse.EventOneofCase.PlayerSendChat:
                                 break;
                             case StreamEventsResponse.EventOneofCase.PlayerChangeSlot:
@@ -276,6 +278,15 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.CoalitionCommand:
                                 break;
                             case StreamEventsResponse.EventOneofCase.GroupCommand:
+                                break;
+                            */
+                            case StreamEventsResponse.EventOneofCase.Disconnect:
+                                var disconnectEvent = eventUpdate.Disconnect;
+                                _disconnectCounter.Add(1, tags);
+                                break;
+                            case StreamEventsResponse.EventOneofCase.Connect:
+                                var connectEvent = eventUpdate.Connect;
+                                _connectCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.SimulationFps:
                                 _serverSimulationFramesPerSecond[serverShortName] = (int) eventUpdate.SimulationFps.Average;
@@ -298,7 +309,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         private Measurement<int> GetSimulationFramesPerSecond(string serverShortName)
         {
-            _logger.LogWarning($"Collecting FPS Value");
             return new Measurement<int>(_serverSimulationFramesPerSecond[serverShortName],
                 new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName));
         }

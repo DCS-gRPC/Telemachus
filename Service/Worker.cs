@@ -27,16 +27,20 @@ namespace RurouniJones.Telemachus.Service
     {
         private readonly ILogger<Worker> _logger;
 
-        private Dictionary<string, GrpcChannel> _gameServerChannels = new();
+        private readonly Dictionary<string, GrpcChannel> _gameServerChannels = new();
 
-        private HashSet<ICollector> _collectors = new();
+        private readonly HashSet<ICollector> _collectors = new();
 
-        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, PlayerDetailsCollector playerCountCollector, EventCollector eventCollector)
+        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig,
+            PlayerDetailsCollector playerDetailsCollector,
+            EventCollector eventCollector,
+            BallisticsCollector ballisticsCollector)
         {
             _logger = logger;
 
-            _collectors.Add(playerCountCollector);
+            _collectors.Add(playerDetailsCollector);
             _collectors.Add(eventCollector);
+            _collectors.Add(ballisticsCollector);
 
             _gameServerChannels = new();
             foreach (var gameServer in appConfig.Value.GameServers)
@@ -58,7 +62,8 @@ namespace RurouniJones.Telemachus.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            foreach (var collector in _collectors) { 
+            _logger.LogInformation("Starting Worker");
+            foreach (var collector in _collectors) {
                 collector.Execute(_gameServerChannels, stoppingToken);
             }
             await Task.Delay(Timeout.Infinite, stoppingToken);
