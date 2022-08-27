@@ -36,7 +36,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
         {
             _logger = logger;
             _session = session;
-            _meter = new Meter("Telemachus.Core.Collectors.BallisticsCollector");
+            _meter = new Meter("Telemachus.Core.Collectors.BallisticCollector");
         }
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)

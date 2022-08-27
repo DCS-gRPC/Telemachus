@@ -49,7 +49,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         public UnitCollector(ILogger<EventCollector> logger, Session session)
         {
-            _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
+            _meter = new Meter("Telemachus.Core.Collectors.UnitCollector");
             _logger = logger;
             _session = session;
 
@@ -58,7 +58,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
         {
-            _logger.LogDebug("Executing EventCollector");
+            _logger.LogDebug("Executing UnitCollector");
             List<Task> tasks = new();
             foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
             {
@@ -114,11 +114,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
                 {
                     if (unitUpdate != null)
                     {
-                        _logger.LogError("Exception processing event stream for {event}: {exception}", unitUpdate, ex.Message);
+                        _logger.LogError("Exception processing unit stream for {unit}: {exception}", unitUpdate, ex.Message);
                     }
                     else
                     {
-                        _logger.LogError("Exception processing event stream: {exception}", ex.Message);
+                        _logger.LogError("Exception processing unit stream: {exception}", ex.Message);
                     }
                     continue;
                 }

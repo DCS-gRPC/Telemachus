@@ -18,7 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
-using System.Security.Cryptography.X509Certificates;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using RurouniJones.Dcs.Grpc.V0.Common;
