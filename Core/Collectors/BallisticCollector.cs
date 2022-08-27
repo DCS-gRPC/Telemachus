@@ -25,14 +25,14 @@ using RurouniJones.Dcs.Grpc.V0.Hook;
 
 namespace RurouniJones.Telemachus.Core.Collectors
 {
-    public class BallisticsCollector : ICollector
+    public class BallisticCollector : ICollector
     {
-        private readonly ILogger<BallisticsCollector> _logger;
+        private readonly ILogger<BallisticCollector> _logger;
         private readonly Session _session;
         private readonly Meter _meter;
 
 
-        public BallisticsCollector(ILogger<BallisticsCollector> logger, Session session)
+        public BallisticCollector(ILogger<BallisticCollector> logger, Session session)
         {
             _logger = logger;
             _session = session;

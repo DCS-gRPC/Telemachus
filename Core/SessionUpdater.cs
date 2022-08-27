@@ -20,10 +20,10 @@ namespace RurouniJones.Telemachus.Core
 {
     public class SessionUpdater
     {
-        private readonly ILogger<BallisticsCollector> _logger;
+        private readonly ILogger<BallisticCollector> _logger;
         private readonly Session _session;
 
-        public SessionUpdater(ILogger<BallisticsCollector> logger, Session session)
+        public SessionUpdater(ILogger<BallisticCollector> logger, Session session)
         {
             _logger = logger;
             _session = session;

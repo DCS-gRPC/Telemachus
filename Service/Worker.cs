@@ -35,7 +35,8 @@ namespace RurouniJones.Telemachus.Service
         public Worker(ILogger<Worker> logger, IOptions<Application> appConfig,
             PlayerDetailsCollector playerDetailsCollector,
             EventCollector eventCollector,
-            BallisticsCollector ballisticsCollector,
+            BallisticCollector ballisticCollector,
+            UnitCollector unitCollector,
             SessionUpdater sessionUpdator)
         {
             _logger = logger;
@@ -43,7 +44,8 @@ namespace RurouniJones.Telemachus.Service
 
             _collectors.Add(playerDetailsCollector);
             _collectors.Add(eventCollector);
-            _collectors.Add(ballisticsCollector);
+            _collectors.Add(ballisticCollector);
+            _collectors.Add(unitCollector);
 
             _gameServerChannels = new();
             foreach (var gameServer in appConfig.Value.GameServers)
@@ -66,7 +68,6 @@ namespace RurouniJones.Telemachus.Service
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Starting Worker");
-
             await _sessionUpdater.ExecuteAsync(_gameServerChannels, stoppingToken);
             foreach (var collector in _collectors) {
                 collector.Execute(_gameServerChannels, stoppingToken);
