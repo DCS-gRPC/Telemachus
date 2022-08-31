@@ -45,6 +45,8 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _pilotDeadCounter;
         private readonly Counter<int> _connectCounter;
         private readonly Counter<int> _disconnectCounter;
+        private readonly Counter<int> _shootingStartCounter;
+
         private readonly ConcurrentDictionary<string, int> _serverSimulationFramesPerSecond;
 
         private readonly Session _session;
@@ -68,6 +70,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _lostCounter = _meter.CreateCounter<int>("lost_counter", "losses", "Number of units lost");
             _connectCounter = _meter.CreateCounter<int>("connect_counter", "connections", "Number of player connection attempts regardless of success or failure");
             _disconnectCounter = _meter.CreateCounter<int>("disconnect_counter", "disconnections", "Number of player disconnections");
+            _shootingStartCounter = _meter.CreateCounter<int>("shooting_start_counter", "starts", "Number of times a rapid-fire weapon starts firing");
             _serverSimulationFramesPerSecond = new();
         }
 
@@ -108,7 +111,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
                         };
                         switch (eventUpdate.EventCase)
                         {
-                        /*
                             case StreamEventsResponse.EventOneofCase.None:
                                 break;
                             case StreamEventsResponse.EventOneofCase.Shot:
@@ -218,6 +220,10 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.PlayerLeaveUnit:
                                 break;
                             case StreamEventsResponse.EventOneofCase.ShootingStart:
+                                var shootingStartEvent = eventUpdate.ShootingStart;
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, shootingStartEvent.Initiator.Unit.Type));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, shootingStartEvent.WeaponName));
+                                _shootingStartCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.ShootingEnd:
                                 break;
@@ -247,12 +253,19 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 } else {
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.WeaponName));
                                 }
-                                if (killEvent.Target.Unit != null) {
+                                if (killEvent.Target.Unit != null)
+                                {
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, killEvent.Target.Unit.Type));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, killEvent.Target.Unit.Coalition));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, killEvent.Target.Unit.HasPlayerName));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, killEvent.Target.Unit.Category));
-                                } else
+                                }
+                                if (killEvent.Target.Static != null)
+                                {
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, killEvent.Target.Static.Type));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, killEvent.Target.Static.Coalition));
+                                }
+                                else
                                 {
                                     _logger.LogWarning("Kill event target was not a unit");
                                 }
@@ -283,7 +296,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 break;
                             case StreamEventsResponse.EventOneofCase.GroupCommand:
                                 break;
-                            */
                             case StreamEventsResponse.EventOneofCase.Disconnect:
                                 var disconnectEvent = eventUpdate.Disconnect;
                                 _disconnectCounter.Add(1, tags);
