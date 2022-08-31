@@ -9,7 +9,7 @@
     <PackageId>$(AssemblyName)</PackageId>
     <Company>$(Authors)</Company>
     <Product>Telemachus</Product>
-    <Description>A bot that collects metrics from DCS-gRPC instances and posts them usig OpenTelemetry</Description>
+    <Description>A bot that collects metrics from DCS-gRPC instances and posts them using OpenTelemetry</Description>
     <Authors>Jeffrey Jones</Authors>
     <Copyright>Copyright Jeffrey Jones 2022</Copyright>
     <PackageProjectUrl>https://github.com/DCS-gRPC/Telemachus</PackageProjectUrl>
@@ -30,6 +30,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="6.0.0" />
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
