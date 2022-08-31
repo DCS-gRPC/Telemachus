@@ -28,9 +28,6 @@ namespace RurouniJones.Telemachus.Core
     {
         private readonly ILogger<Server> _logger;
         private readonly CollectorFactory _collectorFactory;
-        public readonly string Name;
-        public readonly string ShortName;
-        private readonly GrpcChannel _channel;
 
         private Task? _sessionUpdateTask;
         private readonly List<Task> _collectionTasks;
@@ -38,19 +35,16 @@ namespace RurouniJones.Telemachus.Core
 
         private long? _sessionId; 
 
-        public Server(ILogger<Server> logger, CollectorFactory collectorFactory, string name, string shortName, GrpcChannel channel)
+        public Server(ILogger<Server> logger, CollectorFactory collectorFactory)
         {
             _logger = logger;
             _collectorFactory = collectorFactory;
-            Name = name;
-            ShortName = shortName;
-            _channel = channel;
             _collectionTasks = new();
         }
 
-        public async Task StartMonitoringAsync(CancellationToken stoppingToken)
+        public async Task StartMonitoringAsync(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            _sessionUpdateTask = StartUpdatingSessionIdAsync(stoppingToken);
+            _sessionUpdateTask = StartUpdatingSessionIdAsync(shortName, channel, stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
                 if(_sessionId == null)
@@ -61,23 +55,24 @@ namespace RurouniJones.Telemachus.Core
                 _sessionStoppingTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 var sessionStoppingToken = _sessionStoppingTokenSource.Token;
 
-                var collectorConfig = new ICollector.CollectorConfig(ShortName, (long)_sessionId, _channel, sessionStoppingToken);
+                var collectorConfig = new ICollector.CollectorConfig(shortName, (long)_sessionId, channel, sessionStoppingToken);
 
                 var ballisticCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.BallisticCollector, collectorConfig);
-                _collectionTasks.Add(ballisticCollector.MonitorAsync());
+                    _collectorFactory.CreateCollector(ICollector.CollectorType.BallisticCollector);
+                _collectionTasks.Add(ballisticCollector.MonitorAsync(collectorConfig));
 
                 var eventCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.EventCollector, collectorConfig);
-                _collectionTasks.Add(eventCollector.MonitorAsync());
+                    _collectorFactory.CreateCollector(ICollector.CollectorType.EventCollector);
+                _collectionTasks.Add(eventCollector.MonitorAsync(collectorConfig));
 
                 var playerDetailsCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.PlayerDetailsCollector, collectorConfig);
-                _collectionTasks.Add(playerDetailsCollector.MonitorAsync());
+                    _collectorFactory.CreateCollector(ICollector.CollectorType.PlayerDetailsCollector);
+                _collectionTasks.Add(playerDetailsCollector.MonitorAsync(collectorConfig));
 
                 var unitCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.UnitCollector, collectorConfig);
-                _collectionTasks.Add(unitCollector.MonitorAsync());
+                    _collectorFactory.CreateCollector(ICollector.CollectorType.UnitCollector);
+                _collectionTasks.Add(unitCollector.MonitorAsync(collectorConfig));
+
 
                 Task.WaitAll(_collectionTasks.ToArray(), CancellationToken.None);
                 _collectionTasks.Clear();
@@ -85,28 +80,28 @@ namespace RurouniJones.Telemachus.Core
             _sessionUpdateTask.Wait(TimeSpan.FromSeconds(5));
         }
 
-        public async Task StartUpdatingSessionIdAsync(CancellationToken stoppingToken)
+        public async Task StartUpdatingSessionIdAsync(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            var service = new MissionService.MissionServiceClient(_channel);
+            var service = new MissionService.MissionServiceClient(channel);
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    _logger.LogTrace("Getting Session ID for {shortName}", ShortName);
+                    _logger.LogTrace("Getting Session ID for {shortName}", shortName);
                     var response = await service.GetSessionIdAsync(new GetSessionIdRequest(), cancellationToken: stoppingToken);
                     _sessionId = response.SessionId;
                     await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
                 }
                 catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
                 {
-                    _logger.LogWarning("Timed out calling {shortName}", ShortName);
+                    _logger.LogWarning("Timed out calling {shortName}", shortName);
                     _sessionStoppingTokenSource?.Cancel();
                     _sessionId = null;
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Exception calling {shortName}. Exception {exception}", ShortName, ex.Message);
+                    _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
                     _sessionStoppingTokenSource?.Cancel();
                     _sessionId = null;
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);

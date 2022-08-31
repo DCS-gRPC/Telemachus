@@ -28,10 +28,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
     {
 
         private readonly ILogger<EventCollector> _logger;
-        private readonly string _serverShortName;
-        private readonly long _sessionId;
-        private readonly GrpcChannel _channel;
-        private readonly CancellationToken _stoppingToken;
 
         private readonly Meter _meter;
 
@@ -52,13 +48,9 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         private int _serverSimulationFramesPerSecond;
 
-        public EventCollector(ILogger<EventCollector> logger, ICollector.CollectorConfig config)
+        public EventCollector(ILogger<EventCollector> logger)
         {
             _logger = logger;
-            _serverShortName = config.ServerShortName;
-            _channel = config.Channel;
-            _stoppingToken = config.SessionStoppingToken;
-            _sessionId = config.SessionId;
 
             _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
 
@@ -79,28 +71,33 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _serverSimulationFramesPerSecond = new();
         }
 
-        public async Task MonitorAsync()
+        public async Task MonitorAsync(ICollector.CollectorConfig config)
         {
+            var serverShortName = config.ServerShortName;
+            var channel = config.Channel;
+            var stoppingToken = config.SessionStoppingToken;
+            var sessionId = config.SessionId;
+
             _meter.CreateObservableGauge("simulation_frames_per_second_gauge",
-                () => { return GetSimulationFramesPerSecond(); },
+                () => { return GetSimulationFramesPerSecond(serverShortName, sessionId); },
                 description: "The number of server simulation frames per second");
 
-            while (!_stoppingToken.IsCancellationRequested) {
+            while (!stoppingToken.IsCancellationRequested) {
                 StreamEventsResponse? eventUpdate = null;
                 try
                 { 
-                    var client = new MissionService.MissionServiceClient(_channel);
-                    var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: _stoppingToken);
+                    var client = new MissionService.MissionServiceClient(channel);
+                    var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: stoppingToken);
                     _serverSimulationFramesPerSecond = 0;
 
-                    while (await events.ResponseStream.MoveNext(_stoppingToken))
+                    while (await events.ResponseStream.MoveNext(stoppingToken))
                     {
                         eventUpdate = events.ResponseStream.Current;
 
                         var tags = new System.Diagnostics.TagList
                         {
-                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId),
-                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName)
+                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, sessionId),
+                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
                         };
                         switch (eventUpdate.EventCase)
                         {
@@ -317,11 +314,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _meter.Dispose();
         }
 
-        private Measurement<int> GetSimulationFramesPerSecond()
+        private Measurement<int> GetSimulationFramesPerSecond(string serverShortName, long sessionId)
         {
             return new Measurement<int>(_serverSimulationFramesPerSecond,
-                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName),
-                new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId));
+                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName),
+                new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, sessionId));
         }
 
         public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)

@@ -29,9 +29,9 @@ namespace RurouniJones.Telemachus.Core
             _serviceProvider = serviceProvider;
         }
 
-        public Server CreateServer(string name, string shortName, GrpcChannel channel)
+        public Server CreateServer()
         {
-           return ActivatorUtilities.CreateInstance<Server>(_serviceProvider, name, shortName, channel);
+           return ActivatorUtilities.CreateInstance<Server>(_serviceProvider);
         }
     }
 }

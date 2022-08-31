@@ -68,6 +68,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
         public const string STATIC_TYPE_LABEL = "static_type";
         public const string SESSION_ID_LABEL = "session_id";
 
-        public abstract Task MonitorAsync();
+        public abstract Task MonitorAsync(CollectorConfig collectorConfig);
     }
 }

@@ -26,40 +26,39 @@ namespace RurouniJones.Telemachus.Service
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
+        private readonly IOptions<Application> _appConfig;
+        private readonly ServerFactory _serverFactory;
 
-        private readonly List<Server> _servers;
         private readonly List<Task> _serverTasks;
 
         public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, ServerFactory serverFactory)
         {
             _logger = logger;
-            _servers = new();
+            _appConfig = appConfig;
+            _serverFactory = serverFactory;
             _serverTasks = new();
-
-            foreach (var gameServer in appConfig.Value.GameServers)
-            {
-                var channel = GrpcChannel.ForAddress($"http://{gameServer.Rpc.Host}:{gameServer.Rpc.Port}",
-                    new GrpcChannelOptions
-                    {
-                        HttpHandler = new SocketsHttpHandler
-                        {
-                            PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-                            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-                            EnableMultipleHttp2Connections = true,
-                        }
-                    }
-                );
-                _servers.Add(serverFactory.CreateServer(gameServer.Name, gameServer.ShortName, channel));
-            }
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await Task.Run(() => {
                 _logger.LogInformation("Starting Worker");
-                foreach (var server in _servers) {
-                    _serverTasks.Add(server.StartMonitoringAsync(stoppingToken));
+                foreach (var gameServer in _appConfig.Value.GameServers)
+                {
+                    var channel = GrpcChannel.ForAddress($"http://{gameServer.Rpc.Host}:{gameServer.Rpc.Port}",
+                        new GrpcChannelOptions
+                        {
+                            HttpHandler = new SocketsHttpHandler
+                            {
+                                PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+                                KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+                                KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+                                EnableMultipleHttp2Connections = true,
+                            }
+                        }
+                    );
+                    var server = _serverFactory.CreateServer();
+                    _serverTasks.Add(server.StartMonitoringAsync(gameServer.ShortName, channel, stoppingToken));
                 }
                 Task.WaitAll(_serverTasks.ToArray(), CancellationToken.None);
             }, CancellationToken.None);

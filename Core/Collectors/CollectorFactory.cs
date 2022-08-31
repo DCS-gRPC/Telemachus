@@ -28,18 +28,18 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _serviceProvider = serviceProvider;
         }
 
-        public ICollector CreateCollector(CollectorType collectorType, CollectorConfig collectorConfig)
+        public ICollector CreateCollector(CollectorType collectorType)
         {
             switch (collectorType)
             {
                 case CollectorType.BallisticCollector:
-                    return ActivatorUtilities.CreateInstance<BallisticCollector>(_serviceProvider, collectorConfig);
+                    return ActivatorUtilities.CreateInstance<BallisticCollector>(_serviceProvider);
                 case CollectorType.EventCollector:
-                    return ActivatorUtilities.CreateInstance<EventCollector>(_serviceProvider, collectorConfig);
+                    return ActivatorUtilities.CreateInstance<EventCollector>(_serviceProvider);
                 case CollectorType.PlayerDetailsCollector:
-                    return ActivatorUtilities.CreateInstance<PlayerDetailsCollector>(_serviceProvider, collectorConfig);
+                    return ActivatorUtilities.CreateInstance<PlayerDetailsCollector>(_serviceProvider);
                 case CollectorType.UnitCollector:
-                    return ActivatorUtilities.CreateInstance< UnitCollector>(_serviceProvider, collectorConfig);
+                    return ActivatorUtilities.CreateInstance< UnitCollector>(_serviceProvider);
                 default:
                     throw new Exception("Unrecognised Collector Type");
             };

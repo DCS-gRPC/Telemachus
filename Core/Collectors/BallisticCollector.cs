@@ -27,55 +27,52 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public class BallisticCollector : ICollector
     {
         private readonly ILogger<BallisticCollector> _logger;
-        private readonly string _serverShortName;
-        private readonly long _sessionId;
-        private readonly GrpcChannel _channel;
-        private readonly CancellationToken _stoppingToken;
         private readonly Meter _meter;
 
 
-        public BallisticCollector(ILogger<BallisticCollector> logger, ICollector.CollectorConfig config)
+        public BallisticCollector(ILogger<BallisticCollector> logger)
         {
             _logger = logger;
-            _serverShortName = config.ServerShortName;
-            _channel = config.Channel;
-            _stoppingToken = config.SessionStoppingToken;
-            _sessionId = config.SessionId;
             _meter = new Meter("Telemachus.Core.Collectors.BallisticCollector");
         }
 
-        public async Task MonitorAsync()
+        public async Task MonitorAsync(ICollector.CollectorConfig config)
         {
+            var serverShortName = config.ServerShortName;
+            var channel = config.Channel;
+            var stoppingToken = config.SessionStoppingToken;
+            var sessionId = config.SessionId;
+
             _logger.LogDebug("Executing BallisticsCollector");
-            _meter.CreateObservableGauge("ballistics", () => { return GetBallisticsOnServer().Result; },
+            _meter.CreateObservableGauge("ballistics", () => { return GetBallisticsOnServer(serverShortName, sessionId, channel, stoppingToken).Result; },
                 description: "The number of ballistic objects on a server");
-            await Task.Delay(Timeout.Infinite, _stoppingToken);
+            await Task.Delay(Timeout.Infinite, stoppingToken);
             _meter.Dispose();
         }
 
-        private async Task<List<Measurement<int>>> GetBallisticsOnServer()
+        private async Task<List<Measurement<int>>> GetBallisticsOnServer(string serverShortName, long sessionId, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            _logger.LogTrace("Getting Ballistics for {shortName}", _serverShortName);
+            _logger.LogTrace("Getting Ballistics for {shortName}", serverShortName);
             List<Measurement<int>> results = new();
 
-            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId);
-            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName);
+            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, sessionId);
+            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName);
 
-            var service = new HookService.HookServiceClient(_channel);
+            var service = new HookService.HookServiceClient(channel);
             try
             {
-                var response = await service.GetBallisticsCountAsync(new GetBallisticsCountRequest { }, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: _stoppingToken);
+                var response = await service.GetBallisticsCountAsync(new GetBallisticsCountRequest { }, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: stoppingToken);
                 var ballisticsCount = (int)response.Count;
 
                 results.Add(new Measurement<int>(ballisticsCount, sessionTag, serverTag));
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("Timed out calling {shortName}", _serverShortName);
+                _logger.LogWarning("Timed out calling {shortName}", serverShortName);
             }
             catch (Exception ex)
             {
-                _logger.LogError("Exception calling {shortName}. Exception {exception}", _serverShortName, ex.Message);
+                _logger.LogError("Exception calling {shortName}. Exception {exception}", serverShortName, ex.Message);
             }
 
             return results;
