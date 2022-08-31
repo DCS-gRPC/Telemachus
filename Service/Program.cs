@@ -77,18 +77,18 @@ namespace RurouniJones.Telemachus.Service
                             .AddMeter("Telemachus.Core.Collectors.EventCollector")
                             .AddMeter("Telemachus.Core.Collectors.BallisticCollector")
                             .AddMeter("Telemachus.Core.Collectors.UnitCollector")
-
                         );
                         services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(60));
                         services.AddOptions<Configuration.Application>()
                             .Bind(configuration.GetSection("Application"))
                             .ValidateDataAnnotationsRecursively();
-                        services.AddTransient<PlayerDetailsCollector>();
-                        services.AddTransient<EventCollector>();
-                        services.AddTransient<BallisticCollector>();
-                        services.AddTransient<UnitCollector>();
-                        services.AddSingleton<Session>();
-                        services.AddTransient<SessionUpdater>();
+                        services.AddSingleton<CollectorFactory>();
+                        services.AddTransient<ICollector, PlayerDetailsCollector>();
+                        services.AddTransient<ICollector, EventCollector>();
+                        services.AddTransient<ICollector, BallisticCollector>();
+                        services.AddTransient<ICollector, UnitCollector>();
+                        services.AddSingleton<ServerFactory>();
+                        services.AddTransient<Server>();
                     })
                     .UseSerilog();
 

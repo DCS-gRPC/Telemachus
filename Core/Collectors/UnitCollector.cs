@@ -16,8 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Threading.Channels;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using RurouniJones.Dcs.Grpc.V0.Common;
@@ -39,58 +39,51 @@ namespace RurouniJones.Telemachus.Core.Collectors
             }
         }
 
-        private readonly ILogger<EventCollector> _logger;
-
+        private readonly ILogger<UnitCollector> _logger;
+        private readonly string _serverShortName;
+        private readonly long _sessionId;
+        private readonly GrpcChannel _channel;
+        private readonly CancellationToken _stoppingToken;
+        
         private readonly Meter _meter;
 
-        private readonly ConcurrentDictionary<string, HashSet<UnitSummary>> _unitsPerServer;
+        private readonly HashSet<UnitSummary> _units;
 
-        private readonly Session _session;
-
-        public UnitCollector(ILogger<EventCollector> logger, Session session)
+        public UnitCollector(ILogger<UnitCollector> logger, ICollector.CollectorConfig config)
         {
-            _meter = new Meter("Telemachus.Core.Collectors.UnitCollector");
             _logger = logger;
-            _session = session;
+            _serverShortName = config.ServerShortName;
+            _channel = config.Channel;
+            _stoppingToken = config.SessionStoppingToken;
+            _sessionId = config.SessionId;
 
-            _unitsPerServer = new();
+            _meter = new Meter("Telemachus.Core.Collectors.UnitCollector");
+            
+            _units = new();
         }
 
-        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        public async Task MonitorAsync()
         {
-            _logger.LogDebug("Executing UnitCollector");
-            List<Task> tasks = new();
-            foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
-            {
-                var serverShortName = entry.Key;
-                var grpcChannel = entry.Value;
+            _meter.CreateObservableGauge("units_per_server_gauge",
+                () => { return GetUnits(_serverShortName); },
+                description: "The number of unit types currently on the server");
 
-                tasks.Add(MonitorAsync(serverShortName, grpcChannel, stoppingToken));
-                _meter.CreateObservableGauge("units_per_server_gauge",
-                    () => { return GetUnitsPerServer(serverShortName); },
-                    description: "The number of unit types currently on the server");
-            }
-        }
-
-        public async Task MonitorAsync(string serverShortName, GrpcChannel channel, CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
+            while (!_stoppingToken.IsCancellationRequested)
             {
                 StreamUnitsResponse? unitUpdate = null;
                 try
                 {
-                    var client = new MissionService.MissionServiceClient(channel);
-                    var units = client.StreamUnits(new StreamUnitsRequest { }, cancellationToken: stoppingToken);
-                    _unitsPerServer[serverShortName] = new();
+                    var client = new MissionService.MissionServiceClient(_channel);
+                    var units = client.StreamUnits(new StreamUnitsRequest {}, cancellationToken: _stoppingToken);
 
-                    while (await units.ResponseStream.MoveNext(stoppingToken))
+                    while (await units.ResponseStream.MoveNext(_stoppingToken))
                     {
                         unitUpdate = units.ResponseStream.Current;
 
                         var tags = new System.Diagnostics.TagList
                         {
-                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName)),
-                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
+                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId),
+                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName)
                         };
                         switch (unitUpdate.UpdateCase)
                         {
@@ -99,11 +92,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamUnitsResponse.UpdateOneofCase.Unit:
                                 var unitEvent = unitUpdate.Unit;
                                 var unitSummary = new UnitSummary(unitEvent.Id, unitEvent.Category.ToString());
-                                _unitsPerServer[serverShortName].Add(unitSummary);
+                                _units.Add(unitSummary);
                                 break;
                             case StreamUnitsResponse.UpdateOneofCase.Gone:
                                 var goneEvent = unitUpdate.Gone;
-                                _unitsPerServer[serverShortName].RemoveWhere(unit => unit.Id == goneEvent.Id);
+                                _units.RemoveWhere(unit => unit.Id == goneEvent.Id);
                                 break;
                             default:
                                 break;
@@ -123,19 +116,19 @@ namespace RurouniJones.Telemachus.Core.Collectors
                     continue;
                 }
             }
+            _meter.Dispose();
         }
 
-        private List<Measurement<int>> GetUnitsPerServer(string serverShortName)
+        private List<Measurement<int>> GetUnits(string serverShortName)
         {
-            var units = _unitsPerServer[serverShortName];
             List<Measurement<int>> measurements = new();
 
             foreach (var category in (GroupCategory[]) Enum.GetValues(typeof(GroupCategory)))
             {
-                measurements.Add(new Measurement<int>(units.Count(unit => unit.Category == category.ToString()),
+                measurements.Add(new Measurement<int>(_units.Count(unit => unit.Category == category.ToString()),
                     new KeyValuePair<string, object?>(ICollector.CATEGORY_LABEL, category),
                     new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName),
-                    new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName))));
+                    new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId)));
             }
 
             return measurements;

@@ -22,6 +22,32 @@ namespace RurouniJones.Telemachus.Core.Collectors
 {
     public interface ICollector
     {
+
+        public class CollectorConfig {
+
+            public readonly string ServerShortName;
+            public readonly long SessionId;
+            public readonly GrpcChannel Channel;
+            public readonly CancellationToken SessionStoppingToken;
+
+            public CollectorConfig(string serverShortName, long sessionId, GrpcChannel channel, CancellationToken sessionStoppingToken)
+            {
+                ServerShortName = serverShortName;
+                SessionId = sessionId;
+                Channel = channel;
+                SessionStoppingToken = sessionStoppingToken;
+            }
+
+        }
+
+        public enum CollectorType
+        {
+            BallisticCollector,
+            EventCollector,
+            PlayerDetailsCollector,
+            UnitCollector,
+        }
+
         public const string SERVER_SHORT_NAME_LABEL = "server_short_name";
         public const string AIRCRAFT_TYPE_LABEL = "aircraft_type";
         public const string COALITION_LABEL = "coalition";
@@ -42,6 +68,6 @@ namespace RurouniJones.Telemachus.Core.Collectors
         public const string STATIC_TYPE_LABEL = "static_type";
         public const string SESSION_ID_LABEL = "session_id";
 
-        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken);
+        public abstract Task MonitorAsync();
     }
 }

@@ -16,7 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
@@ -29,6 +28,10 @@ namespace RurouniJones.Telemachus.Core.Collectors
     {
 
         private readonly ILogger<EventCollector> _logger;
+        private readonly string _serverShortName;
+        private readonly long _sessionId;
+        private readonly GrpcChannel _channel;
+        private readonly CancellationToken _stoppingToken;
 
         private readonly Meter _meter;
 
@@ -47,15 +50,17 @@ namespace RurouniJones.Telemachus.Core.Collectors
         private readonly Counter<int> _disconnectCounter;
         private readonly Counter<int> _shootingStartCounter;
 
-        private readonly ConcurrentDictionary<string, int> _serverSimulationFramesPerSecond;
+        private int _serverSimulationFramesPerSecond;
 
-        private readonly Session _session;
-
-        public EventCollector(ILogger<EventCollector> logger, Session session)
+        public EventCollector(ILogger<EventCollector> logger, ICollector.CollectorConfig config)
         {
-            _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
             _logger = logger;
-            _session = session;
+            _serverShortName = config.ServerShortName;
+            _channel = config.Channel;
+            _stoppingToken = config.SessionStoppingToken;
+            _sessionId = config.SessionId;
+
+            _meter = new Meter("Telemachus.Core.Collectors.EventCollector");
 
             _birthCounter = _meter.CreateCounter<int>("birth_counter", "births", "Number of units birth");
             _shootCounter = _meter.CreateCounter<int>("shoot_counter", "shots", "Number of shots");
@@ -74,40 +79,28 @@ namespace RurouniJones.Telemachus.Core.Collectors
             _serverSimulationFramesPerSecond = new();
         }
 
-        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        public async Task MonitorAsync()
         {
-            _logger.LogDebug("Executing EventCollector");
-            List<Task> tasks = new();
-            foreach (KeyValuePair<string, GrpcChannel> entry in gameServerChannels)
-            {
-                var serverShortName = entry.Key;
-                var grpcChannel = entry.Value;
+            _meter.CreateObservableGauge("simulation_frames_per_second_gauge",
+                () => { return GetSimulationFramesPerSecond(); },
+                description: "The number of server simulation frames per second");
 
-                tasks.Add(MonitorAsync(serverShortName, grpcChannel, stoppingToken));
-                _meter.CreateObservableGauge("simulation_frames_per_second_gauge",
-                    () => { return GetSimulationFramesPerSecond(serverShortName); },
-                    description: "The number of server simulation frames per second");
-            }
-        }
-
-        public async Task MonitorAsync(string serverShortName, GrpcChannel channel, CancellationToken stoppingToken)
-        {
-            while(!stoppingToken.IsCancellationRequested) {
+            while (!_stoppingToken.IsCancellationRequested) {
                 StreamEventsResponse? eventUpdate = null;
                 try
                 { 
-                    var client = new MissionService.MissionServiceClient(channel);
-                    var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: stoppingToken);
-                    _serverSimulationFramesPerSecond[serverShortName] = 0;
+                    var client = new MissionService.MissionServiceClient(_channel);
+                    var events = client.StreamEvents(new StreamEventsRequest {}, cancellationToken: _stoppingToken);
+                    _serverSimulationFramesPerSecond = 0;
 
-                    while (await events.ResponseStream.MoveNext(stoppingToken))
+                    while (await events.ResponseStream.MoveNext(_stoppingToken))
                     {
                         eventUpdate = events.ResponseStream.Current;
 
                         var tags = new System.Diagnostics.TagList
                         {
-                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName)),
-                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName)
+                            new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId),
+                            new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName)
                         };
                         switch (eventUpdate.EventCase)
                         {
@@ -305,7 +298,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 _connectCounter.Add(1, tags);
                                 break;
                             case StreamEventsResponse.EventOneofCase.SimulationFps:
-                                _serverSimulationFramesPerSecond[serverShortName] = (int) eventUpdate.SimulationFps.Average;
+                                _serverSimulationFramesPerSecond = (int) eventUpdate.SimulationFps.Average;
                                 break;
                             default:
                                 break;
@@ -321,13 +314,14 @@ namespace RurouniJones.Telemachus.Core.Collectors
                     continue;
                 }
             }
+            _meter.Dispose();
         }
 
-        private Measurement<int> GetSimulationFramesPerSecond(string serverShortName)
+        private Measurement<int> GetSimulationFramesPerSecond()
         {
-            return new Measurement<int>(_serverSimulationFramesPerSecond[serverShortName],
-                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, serverShortName),
-                new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(serverShortName)));
+            return new Measurement<int>(_serverSimulationFramesPerSecond,
+                new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName),
+                new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId));
         }
 
         public static System.Diagnostics.TagList StandardSingleUnitEventTags(System.Diagnostics.TagList tags, Unit unit)

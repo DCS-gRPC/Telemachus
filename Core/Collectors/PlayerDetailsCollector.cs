@@ -16,7 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -29,58 +28,47 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public class PlayerDetailsCollector : ICollector
     {
         private readonly ILogger<PlayerDetailsCollector> _logger;
-        private readonly Session _session;
-
+        private readonly string _serverShortName;
+        private readonly long _sessionId;
+        private readonly GrpcChannel _channel;
+        private readonly CancellationToken _stoppingToken;
 
         private readonly Meter _meter;
         private readonly Histogram<int> _playerPings; // In milliseconds
 
-        public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger, Session session)
+        public PlayerDetailsCollector(ILogger<PlayerDetailsCollector> logger, ICollector.CollectorConfig config)
         {
-            _meter = new Meter("Telemachus.Core.Collectors.PlayerCountCollector");
             _logger = logger;
+            _serverShortName = config.ServerShortName;
+            _channel = config.Channel;
+            _stoppingToken = config.SessionStoppingToken;
+            _sessionId = config.SessionId;
+
+            _meter = new Meter("Telemachus.Core.Collectors.PlayerCountCollector");
             _playerPings = _meter.CreateHistogram<int>("player_pings", "milliseconds", "Player Ping Times in milliseconds");
-            _session = session;
         }
 
-        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        public async Task MonitorAsync()
         {
             _logger.LogDebug("Executing PlayerDetailsCollector");
-            _meter.CreateObservableGauge("players", () => { return GetPlayersOnServers(gameServerChannels, stoppingToken); },
+            _meter.CreateObservableGauge("players", () => { return GetPlayersOnServer().Result; },
                 description: "The number of players on a server");
+            await Task.Delay(Timeout.Infinite, _stoppingToken);
+            _meter.Dispose();
         }
 
-        private List<Measurement<int>> GetPlayersOnServers(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        private async Task<List<Measurement<int>>> GetPlayersOnServer()
         {
-            ConcurrentBag<Measurement<int>> results = new();
-            List<Task> tasks = new();
-
-            foreach (KeyValuePair<string, GrpcChannel> server in gameServerChannels)
-            {
-                tasks.Add(Task.Run(async () =>
-                {
-                    foreach (var item in await GetPlayersOnServer(server.Key, server.Value, stoppingToken))
-                    {
-                        results.Add(item);
-                    }
-                }, stoppingToken));
-            }
-            Task.WaitAll(tasks.ToArray(), stoppingToken);
-
-            return results.ToList();
-        }
-        private async Task<List<Measurement<int>>> GetPlayersOnServer(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
-        {
-            _logger.LogDebug("Getting Players for {shortName}", shortName);
+            _logger.LogDebug("Getting Players for {shortName}", _serverShortName);
             List<Measurement<int>> results = new();
 
-            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(shortName));
-            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
+            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId);
+            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName);
 
-            var service = new NetService.NetServiceClient(channel);
+            var service = new NetService.NetServiceClient(_channel);
             try
             {
-                var response = await service.GetPlayersAsync(new GetPlayersRequest { }, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: stoppingToken);
+                var response = await service.GetPlayersAsync(new GetPlayersRequest {}, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: _stoppingToken);
                 var players = response.Players;
 
                 // Get Coalition counts
@@ -105,11 +93,11 @@ namespace RurouniJones.Telemachus.Core.Collectors
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("Timed out calling {shortName}", shortName);
+                _logger.LogWarning("Timed out calling {shortName}", _serverShortName);
             }
             catch (Exception ex)
             {
-                _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
+                _logger.LogError("Exception calling {shortName}. Exception {exception}", _serverShortName, ex.Message);
             }
 
             return results;

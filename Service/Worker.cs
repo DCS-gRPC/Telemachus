@@ -20,37 +20,25 @@ using Grpc.Net.Client;
 using Microsoft.Extensions.Options;
 using RurouniJones.Telemachus.Configuration;
 using RurouniJones.Telemachus.Core;
-using RurouniJones.Telemachus.Core.Collectors;
 
 namespace RurouniJones.Telemachus.Service
 {
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
-        private readonly HashSet<ICollector> _collectors = new();
-        private readonly SessionUpdater _sessionUpdater;
 
-        private readonly Dictionary<string, GrpcChannel> _gameServerChannels = new();
+        private readonly List<Server> _servers;
+        private readonly List<Task> _serverTasks;
 
-        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig,
-            PlayerDetailsCollector playerDetailsCollector,
-            EventCollector eventCollector,
-            BallisticCollector ballisticCollector,
-            UnitCollector unitCollector,
-            SessionUpdater sessionUpdator)
+        public Worker(ILogger<Worker> logger, IOptions<Application> appConfig, ServerFactory serverFactory)
         {
             _logger = logger;
-            _sessionUpdater = sessionUpdator;
+            _servers = new();
+            _serverTasks = new();
 
-            _collectors.Add(playerDetailsCollector);
-            _collectors.Add(eventCollector);
-            _collectors.Add(ballisticCollector);
-            _collectors.Add(unitCollector);
-
-            _gameServerChannels = new();
             foreach (var gameServer in appConfig.Value.GameServers)
             {
-                _gameServerChannels[gameServer.ShortName] = GrpcChannel.ForAddress($"http://{gameServer.Rpc.Host}:{gameServer.Rpc.Port}",
+                var channel = GrpcChannel.ForAddress($"http://{gameServer.Rpc.Host}:{gameServer.Rpc.Port}",
                     new GrpcChannelOptions
                     {
                         HttpHandler = new SocketsHttpHandler
@@ -62,17 +50,19 @@ namespace RurouniJones.Telemachus.Service
                         }
                     }
                 );
+                _servers.Add(serverFactory.CreateServer(gameServer.Name, gameServer.ShortName, channel));
             }
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Starting Worker");
-            await _sessionUpdater.ExecuteAsync(_gameServerChannels, stoppingToken);
-            foreach (var collector in _collectors) {
-                collector.Execute(_gameServerChannels, stoppingToken);
-            }
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            await Task.Run(() => {
+                _logger.LogInformation("Starting Worker");
+                foreach (var server in _servers) {
+                    _serverTasks.Add(server.StartMonitoringAsync(stoppingToken));
+                }
+                Task.WaitAll(_serverTasks.ToArray(), CancellationToken.None);
+            }, CancellationToken.None);
         }
     }
 }

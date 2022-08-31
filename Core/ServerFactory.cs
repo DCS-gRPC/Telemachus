@@ -16,26 +16,22 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using Grpc.Net.Client;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace RurouniJones.Telemachus.Core
 {
-    public class Session
+    public class ServerFactory
     {
-        private Dictionary<string, long> _sessionId = new Dictionary<string, long>();
-
-        public void SetSessionId(string serverShortName, long sessionId)
+        private readonly IServiceProvider _serviceProvider;
+        public ServerFactory(IServiceProvider serviceProvider)
         {
-            _sessionId[serverShortName] = sessionId;
+            _serviceProvider = serviceProvider;
         }
 
-        public string GetSessionId(string serverShortName)
+        public Server CreateServer(string name, string shortName, GrpcChannel channel)
         {
-            if(_sessionId.ContainsKey(serverShortName))
-            {
-                return _sessionId[serverShortName].ToString();
-            } else
-            {
-                return "NoSessionId";
-            }
+           return ActivatorUtilities.CreateInstance<Server>(_serviceProvider, name, shortName, channel);
         }
     }
 }

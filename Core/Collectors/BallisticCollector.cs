@@ -16,7 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -28,66 +27,55 @@ namespace RurouniJones.Telemachus.Core.Collectors
     public class BallisticCollector : ICollector
     {
         private readonly ILogger<BallisticCollector> _logger;
-        private readonly Session _session;
+        private readonly string _serverShortName;
+        private readonly long _sessionId;
+        private readonly GrpcChannel _channel;
+        private readonly CancellationToken _stoppingToken;
         private readonly Meter _meter;
 
 
-        public BallisticCollector(ILogger<BallisticCollector> logger, Session session)
+        public BallisticCollector(ILogger<BallisticCollector> logger, ICollector.CollectorConfig config)
         {
             _logger = logger;
-            _session = session;
+            _serverShortName = config.ServerShortName;
+            _channel = config.Channel;
+            _stoppingToken = config.SessionStoppingToken;
+            _sessionId = config.SessionId;
             _meter = new Meter("Telemachus.Core.Collectors.BallisticCollector");
         }
 
-        public void Execute(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        public async Task MonitorAsync()
         {
             _logger.LogDebug("Executing BallisticsCollector");
-            _meter.CreateObservableGauge("ballistics", () => { return GetBallisticsOnServers(gameServerChannels, stoppingToken); },
+            _meter.CreateObservableGauge("ballistics", () => { return GetBallisticsOnServer().Result; },
                 description: "The number of ballistic objects on a server");
+            await Task.Delay(Timeout.Infinite, _stoppingToken);
+            _meter.Dispose();
         }
 
-        private List<Measurement<int>> GetBallisticsOnServers(Dictionary<string, GrpcChannel> gameServerChannels, CancellationToken stoppingToken)
+        private async Task<List<Measurement<int>>> GetBallisticsOnServer()
         {
-            ConcurrentBag<Measurement<int>> results = new();
-            List<Task> tasks = new();
-
-            foreach (KeyValuePair<string, GrpcChannel> server in gameServerChannels)
-            {
-                tasks.Add(Task.Run(async () =>
-                {
-                    foreach (var item in await GetBallisticsOnServer(server.Key, server.Value, stoppingToken))
-                    {
-                        results.Add(item);
-                    }
-                }, stoppingToken));
-            }
-            Task.WaitAll(tasks.ToArray(), stoppingToken);
-
-            return results.ToList();
-        }
-        private async Task<List<Measurement<int>>> GetBallisticsOnServer(string shortName, GrpcChannel channel, CancellationToken stoppingToken)
-        {
-            _logger.LogDebug("Getting Ballistics for {shortName}", shortName);           
+            _logger.LogTrace("Getting Ballistics for {shortName}", _serverShortName);
             List<Measurement<int>> results = new();
 
-            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _session.GetSessionId(shortName));
-            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, shortName);
+            var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, _sessionId);
+            var serverTag = new KeyValuePair<string, object?>(ICollector.SERVER_SHORT_NAME_LABEL, _serverShortName);
 
-            var service = new HookService.HookServiceClient(channel);
+            var service = new HookService.HookServiceClient(_channel);
             try
             {
-                var response = await service.GetBallisticsCountAsync(new GetBallisticsCountRequest {}, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: stoppingToken);
-                var ballisticsCount = (int) response.Count;
+                var response = await service.GetBallisticsCountAsync(new GetBallisticsCountRequest { }, deadline: DateTime.UtcNow.AddSeconds(0.5), cancellationToken: _stoppingToken);
+                var ballisticsCount = (int)response.Count;
 
                 results.Add(new Measurement<int>(ballisticsCount, sessionTag, serverTag));
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("Timed out calling {shortName}", shortName);
+                _logger.LogWarning("Timed out calling {shortName}", _serverShortName);
             }
             catch (Exception ex)
             {
-                _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
+                _logger.LogError("Exception calling {shortName}. Exception {exception}", _serverShortName, ex.Message);
             }
 
             return results;
