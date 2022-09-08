@@ -52,30 +52,44 @@ namespace RurouniJones.Telemachus.Core
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
                     continue;
                 }
+                _logger.LogInformation("Starting Collectors for {shortName} with {sessionId}", shortName, _sessionId);
+
                 _sessionStoppingTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 var sessionStoppingToken = _sessionStoppingTokenSource.Token;
 
                 var collectorConfig = new ICollector.CollectorConfig(shortName, (long)_sessionId, channel, sessionStoppingToken);
 
-                var ballisticCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.BallisticCollector);
-                _collectionTasks.Add(ballisticCollector.MonitorAsync(collectorConfig));
+                try { 
+                    var ballisticCollector =
+                        _collectorFactory.CreateCollector(ICollector.CollectorType.BallisticCollector);
+                    _collectionTasks.Add(ballisticCollector.MonitorAsync(collectorConfig));
 
-                var eventCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.EventCollector);
-                _collectionTasks.Add(eventCollector.MonitorAsync(collectorConfig));
+                    var eventCollector =
+                        _collectorFactory.CreateCollector(ICollector.CollectorType.EventCollector);
+                    _collectionTasks.Add(eventCollector.MonitorAsync(collectorConfig));
 
-                var playerDetailsCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.PlayerDetailsCollector);
-                _collectionTasks.Add(playerDetailsCollector.MonitorAsync(collectorConfig));
+                    var playerDetailsCollector =
+                        _collectorFactory.CreateCollector(ICollector.CollectorType.PlayerDetailsCollector);
+                    _collectionTasks.Add(playerDetailsCollector.MonitorAsync(collectorConfig));
 
-                var unitCollector =
-                    _collectorFactory.CreateCollector(ICollector.CollectorType.UnitCollector);
-                _collectionTasks.Add(unitCollector.MonitorAsync(collectorConfig));
+                    var unitCollector =
+                        _collectorFactory.CreateCollector(ICollector.CollectorType.UnitCollector);
+                    _collectionTasks.Add(unitCollector.MonitorAsync(collectorConfig));
 
-
-                Task.WaitAll(_collectionTasks.ToArray(), CancellationToken.None);
-                _collectionTasks.Clear();
+                    await Task.WhenAll(_collectionTasks.ToArray());
+                } catch (OperationCanceledException ex) {
+                    _logger.LogError("Server monitoring stopped for {shortName}. Exception {exception}", shortName, ex.Message);
+                }
+                catch (Exception ex) {
+                    _logger.LogError("Server monitoring stopped for {shortName}. Exception {exception}", shortName, ex.Message);
+                    _sessionStoppingTokenSource.Cancel();
+                }
+                finally
+                {
+                    _sessionStoppingTokenSource.Dispose();
+                    _logger.LogInformation("Clearing all collection tasks for {shortName}", shortName);
+                    _collectionTasks.Clear();
+                }
             }
             _sessionUpdateTask.Wait(TimeSpan.FromSeconds(5));
         }
@@ -95,6 +109,7 @@ namespace RurouniJones.Telemachus.Core
                 catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
                 {
                     _logger.LogWarning("Timed out calling {shortName}", shortName);
+                    _logger.LogInformation("Clearing Session ID for {shortName}", shortName);
                     _sessionStoppingTokenSource?.Cancel();
                     _sessionId = null;
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
@@ -102,6 +117,7 @@ namespace RurouniJones.Telemachus.Core
                 catch (Exception ex)
                 {
                     _logger.LogError("Exception calling {shortName}. Exception {exception}", shortName, ex.Message);
+                    _logger.LogInformation("Clearing Session ID for {shortName}", shortName);
                     _sessionStoppingTokenSource?.Cancel();
                     _sessionId = null;
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);

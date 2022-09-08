@@ -56,7 +56,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
         private async Task<List<Measurement<int>>> GetPlayersOnServer(string serverShortName, long sessionId, GrpcChannel channel, CancellationToken stoppingToken)
         {
-            _logger.LogDebug("Getting Players for {shortName}", serverShortName);
+            _logger.LogTrace("Getting Players for {shortName}", serverShortName);
             List<Measurement<int>> results = new();
 
             var sessionTag = new KeyValuePair<string, object?>(ICollector.SESSION_ID_LABEL, sessionId);
@@ -88,7 +88,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                     _playerPings.Record((int)player.Ping, sessionTag, serverTag);
                 }
             }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded || ex.StatusCode == StatusCode.Cancelled)
             {
                 _logger.LogWarning("Timed out calling {shortName}", serverShortName);
             }

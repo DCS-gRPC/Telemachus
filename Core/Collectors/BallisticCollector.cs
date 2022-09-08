@@ -66,7 +66,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
 
                 results.Add(new Measurement<int>(ballisticsCount, sessionTag, serverTag));
             }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded || ex.StatusCode == StatusCode.Cancelled)
             {
                 _logger.LogWarning("Timed out calling {shortName}", serverShortName);
             }

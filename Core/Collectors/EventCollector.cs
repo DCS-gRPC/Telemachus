@@ -135,7 +135,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 }
                                 else
                                 {
-                                    _logger.LogInformation("Hit event target was not a unit. Skipping processing"); // TODO handle other cases like statics etc.
+                                    _logger.LogWarning("Hit event target was not a unit. Skipping processing: {event}", hitEvent); // TODO handle other cases like statics etc.
                                 }
                                 _hitCounter.Add(1, tags);
                                 break;
@@ -226,12 +226,12 @@ namespace RurouniJones.Telemachus.Core.Collectors
                             case StreamEventsResponse.EventOneofCase.Kill:
                                 var killEvent = eventUpdate.Kill;
                                 if(killEvent.Initiator.Unit == null) {
-                                    _logger.LogWarning("Kill event with no initiator unit");
+                                    _logger.LogWarning("Kill event with no initiator unit: {event}", killEvent);
                                     continue;
                                 }
                                 if (killEvent.Weapon == null)
                                 {
-                                    _logger.LogWarning("Kill event with no weapon");
+                                    _logger.LogWarning("Kill event with no weapon: {event}", killEvent);
                                     continue;
                                 }
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, killEvent.Initiator.Unit.Type));
@@ -257,7 +257,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 }
                                 else
                                 {
-                                    _logger.LogWarning("Kill event target was not a unit");
+                                    _logger.LogWarning("Kill event target was not a unit: {event}", killEvent);
                                 }
                                 _killCounter.Add(1, tags);
                                 break;
