@@ -98,7 +98,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 break;
                             case StreamUnitsResponse.UpdateOneofCase.Unit:
                                 var unitEvent = unitUpdate.Unit;
-                                var unitSummary = new UnitSummary(unitEvent.Id, unitEvent.Category.ToString());
+                                var unitSummary = new UnitSummary(unitEvent.Id, unitEvent.Group.Category.ToString());
                                 _unitsPerServer[serverShortName].Add(unitSummary);
                                 break;
                             case StreamUnitsResponse.UpdateOneofCase.Gone:

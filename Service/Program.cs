@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -57,28 +58,28 @@ namespace RurouniJones.Telemachus.Service
                     .ConfigureServices(services =>
                     {
                         services.AddHostedService<Worker>();
-                        services.AddOpenTelemetryMetrics(builder => builder
-                            .SetResourceBuilder(ResourceBuilder.CreateDefault()
-                                .AddService("Telemachus")
-                            )
-                            .AddConsoleExporter()
-                            .AddOtlpExporter((o, m) =>
-                            {
-                                o.Protocol = OtlpExportProtocol.Grpc;
-                                o.HttpClientFactory = () =>
+                        services.AddOpenTelemetry().WithMetrics(
+                            builder => builder.SetResourceBuilder(
+                                ResourceBuilder.CreateDefault()
+                                .AddService("Telemachus"))
+                                .AddConsoleExporter()
+                                .AddOtlpExporter((o, m) =>
                                 {
-                                    HttpClient client = new HttpClient();
-                                    return client;
-                                };
-                                o.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
-                                m.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = (int) TimeSpan.FromSeconds(1).TotalMilliseconds;
-                            })
-                            .AddMeter("Telemachus.Core.Collectors.PlayerCountCollector")
-                            .AddMeter("Telemachus.Core.Collectors.EventCollector")
-                            .AddMeter("Telemachus.Core.Collectors.BallisticCollector")
-                            .AddMeter("Telemachus.Core.Collectors.UnitCollector")
-
-                        );
+                                    o.Protocol = OtlpExportProtocol.Grpc;
+                                    o.HttpClientFactory = () =>
+                                    {
+                                        HttpClient client = new HttpClient();
+                                        return client;
+                                    };
+                                    o.ExportProcessorType = ExportProcessorType.Simple;
+                                    m.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = (int)TimeSpan.FromSeconds(1).TotalMilliseconds;
+                                }
+                                )
+                                .AddMeter("Telemachus.Core.Collectors.PlayerCountCollector")
+                                .AddMeter("Telemachus.Core.Collectors.EventCollector")
+                                .AddMeter("Telemachus.Core.Collectors.BallisticCollector")
+                                .AddMeter("Telemachus.Core.Collectors.UnitCollector")
+                            ).StartWithHost();
                         services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(60));
                         services.AddOptions<Configuration.Application>()
                             .Bind(configuration.GetSection("Application"))

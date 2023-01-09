@@ -118,7 +118,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, shotEvent.Initiator.Unit.Type));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, shotEvent.Initiator.Unit.Coalition));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, shotEvent.Initiator.Unit.HasPlayerName));
-                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, shotEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, shotEvent.Initiator.Unit.Group.Category));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, shotEvent.Weapon.Type));
                                 _shootCounter.Add(1, tags);
                                 break;
@@ -127,7 +127,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, hitEvent.Initiator.Unit.Type));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, hitEvent.Initiator.Unit.Coalition));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, hitEvent.Initiator.Unit.HasPlayerName));
-                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, hitEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, hitEvent.Initiator.Unit.Group.Category));
                                 if (hitEvent.Weapon != null)
                                 {
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, hitEvent.Weapon.Type));
@@ -141,7 +141,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, hitEvent.Target.Unit.Type));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, hitEvent.Target.Unit.Coalition));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, hitEvent.Target.Unit.HasPlayerName));
-                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, hitEvent.Target.Unit.Category));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, hitEvent.Target.Unit.Group.Category));
                                 }
                                 else
                                 {
@@ -247,7 +247,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_TYPE_LABEL, killEvent.Initiator.Unit.Type));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_COALITION_LABEL, killEvent.Initiator.Unit.Coalition));
                                 tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_IS_PLAYER_LABEL, killEvent.Initiator.Unit.HasPlayerName));
-                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, killEvent.Initiator.Unit.Category));
+                                tags.Add(new KeyValuePair<string, object?>(ICollector.SHOOTER_CATEGORY_LABEL, killEvent.Initiator.Unit.Group.Category));
                                 if(killEvent.Weapon != null) { 
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.WEAPON_LABEL, killEvent.Weapon.Type));
                                 } else {
@@ -258,7 +258,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_TYPE_LABEL, killEvent.Target.Unit.Type));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_COALITION_LABEL, killEvent.Target.Unit.Coalition));
                                     tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_IS_PLAYER_LABEL, killEvent.Target.Unit.HasPlayerName));
-                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, killEvent.Target.Unit.Category));
+                                    tags.Add(new KeyValuePair<string, object?>(ICollector.TARGET_CATEGORY_LABEL, killEvent.Target.Unit.Group.Category));
                                 }
                                 if (killEvent.Target.Static != null)
                                 {
@@ -335,7 +335,7 @@ namespace RurouniJones.Telemachus.Core.Collectors
             tags.Add(new KeyValuePair<string, object?>(ICollector.UNIT_TYPE_LABEL, unit.Type));
             tags.Add(new KeyValuePair<string, object?>(ICollector.COALITION_LABEL, unit.Coalition));
             tags.Add(new KeyValuePair<string, object?>(ICollector.IS_PLAYER_LABEL, unit.HasPlayerName));
-            tags.Add(new KeyValuePair<string, object?>(ICollector.CATEGORY_LABEL, unit.Category));
+            tags.Add(new KeyValuePair<string, object?>(ICollector.CATEGORY_LABEL, unit.Group.Category));
             return tags;
         }
     }

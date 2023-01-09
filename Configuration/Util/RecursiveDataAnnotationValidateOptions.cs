@@ -15,7 +15,7 @@ namespace RurouniJones.Telemachus.Configuration.Util
 
         public string Name { get; }
 
-        public ValidateOptionsResult Validate(string name, TOptions options)
+        public ValidateOptionsResult Validate(string? name, TOptions options)
         {
             if (name != Name)
                 return ValidateOptionsResult.Skip;
