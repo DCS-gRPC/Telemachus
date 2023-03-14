@@ -38,7 +38,7 @@ service:
 
 ## Telemachus
 
-1. Download Telemachus from URL and extract into a folder of your choice.
+1. Download the latest Telemachus from https://github.com/DCS-gRPC/Telemachus/releases and extract into a folder of your choice.
 2. Modify the `configuration.yaml` file to suit your installation. The file
    has comments that explain the various options.
 3. Run the bot using the `Telemachus.exe` or optionally run as a Windows Service
